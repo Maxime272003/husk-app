@@ -1,6 +1,7 @@
 import sys
 import math
 import subprocess
+import os
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
     QHBoxLayout, QLabel, QListWidget, QTextEdit, QRadioButton, QGroupBox, QStatusBar, QMessageBox, QFileDialog, QComboBox
@@ -13,7 +14,14 @@ class HuskRenderApp(QWidget):
         super().__init__()
         self.setWindowTitle('Automatisation de Rendus Husk')
         self.setGeometry(200, 200, 600, 600)
-        self.setWindowIcon(QIcon("icon.ico"))
+
+        # Ajoute ceci pour trouver l'icône même dans l'exe
+        icon_path = os.path.join(
+            getattr(sys, '_MEIPASS', os.path.dirname(
+                os.path.abspath(__file__))),
+            "icon.ico"
+        )
+        self.setWindowIcon(QIcon(icon_path))
 
         self.render_queue = []
 
@@ -228,8 +236,13 @@ class HuskRenderApp(QWidget):
 
 
 if __name__ == "__main__":
+    # Même chose ici
+    icon_path = os.path.join(
+        getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))),
+        "icon.ico"
+    )
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("icon.ico"))
+    app.setWindowIcon(QIcon(icon_path))
     window = HuskRenderApp()
     window.show()
     sys.exit(app.exec_())
