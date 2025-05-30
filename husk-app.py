@@ -1,11 +1,11 @@
-import sys
-import math
-import subprocess
 import os
+import sys
 import configparser
+import subprocess
+
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
-    QHBoxLayout, QLabel, QListWidget, QTextEdit, QRadioButton, QGroupBox, QStatusBar, QMessageBox, QFileDialog, QComboBox, QDialog
+    QHBoxLayout, QLabel, QListWidget, QTextEdit, QRadioButton, QGroupBox, QStatusBar, QMessageBox, QFileDialog, QDialog
 )
 from PyQt5.QtGui import QIcon
 
@@ -65,7 +65,7 @@ class HuskRenderApp(QWidget):
         self.setWindowTitle('Automatisation de Rendus Husk')
         self.setGeometry(200, 200, 600, 600)
 
-        # Ajoute ceci pour trouver l'icône même dans l'exe
+        # Gestion de l'icône (compatible PyInstaller)
         icon_path = os.path.join(
             getattr(sys, '_MEIPASS', os.path.dirname(
                 os.path.abspath(__file__))),
@@ -110,6 +110,7 @@ class HuskRenderApp(QWidget):
         if dialog.exec_():
             self.config.read(self.config_path)
             self.load_environment_paths()
+            self.log_message("Paramètres mis à jour.")
 
     def create_form_layout(self, layout):
         form_layout = QFormLayout()
@@ -193,122 +194,113 @@ class HuskRenderApp(QWidget):
 
         if not scene_path or not start_frame or not end_frame or not resolution:
             QMessageBox.warning(
-                self, "Erreur", "Veuillez remplir tous les champs obligatoires.")
-            return
-
-        render_details = {
-            "scene_path": scene_path,
-            "start_frame": start_frame,
-            "end_frame": end_frame,
-            "resolution": resolution,
-            "renderer": renderer,
-            "type": render_type
-        }
-
-        # Génération de la commande preview
-        if render_type == "full":
-            cmd_preview = f'husk --frame {start_frame}-{end_frame} --renderer {renderer} --res-scale {resolution} "{scene_path}"'
-        else:
-            # Correction du calcul de la frame du milieu
-            start = int(start_frame)
-            end = int(end_frame)
-            mid = start + math.ceil((end - start) / 2)
-            frames = [str(start), str(mid), str(end)]
-            frame_str = " ".join(frames)
-            cmd_preview = f'husk --frame-list {frame_str} --renderer {renderer} --res-scale {resolution} \"{scene_path}\"'
-
-        render_details["cmd_preview"] = cmd_preview
-
-        self.render_queue.append(render_details)
-        self.render_queue_list.addItem(
-            f"{cmd_preview}"
-        )
-        self.log_message("Rendu ajouté à la file d'attente.")
-
-    def remove_selected_render(self):
-        selected_row = self.render_queue_list.currentRow()
-        if selected_row >= 0:
-            self.render_queue.pop(selected_row)
-            self.render_queue_list.takeItem(selected_row)
-            self.log_message("Rendu supprimé de la file d'attente.")
-
-    def start_render(self):
-        if self.render_queue:
-            self.start_render_queue()
-        else:
-            self.start_single_render()
-
-    def start_single_render(self):
-        scene_path = self.scene_path_input.text()
-        start_frame = self.start_frame_input.text()
-        end_frame = self.end_frame_input.text()
-        resolution = self.resolution_input.text()
-        renderer = "Karma" if self.karma_radio.isChecked() else "KarmaXPU"
-        render_type = "full" if self.full_render_radio.isChecked() else "fml"
-
-        if not scene_path or not start_frame or not end_frame or not resolution:
-            QMessageBox.warning(
-                self, "Erreur", "Veuillez remplir tous les champs obligatoires.")
+                self, "Erreur", "Veuillez remplir tous les champs.")
             return
 
         try:
-            if render_type == "full":
-                self.render_scene_full(scene_path, int(start_frame), int(
-                    end_frame), renderer, int(resolution))
-            else:
-                self.render_scene_fml(scene_path, int(start_frame), int(
-                    end_frame), renderer, int(resolution))
-            self.log_message("Rendu unique terminé.")
-        except Exception as e:
-            self.log_message(f"Erreur lors du rendu unique : {str(e)}")
+            start_frame_int = int(start_frame)
+            end_frame_int = int(end_frame)
+            res_scale_int = int(resolution)
+        except ValueError:
+            QMessageBox.warning(
+                self, "Erreur", "Les frames et la résolution doivent être des entiers.")
+            return
+
+        renderer_map = {
+            "Karma": "BRAY_HdKarma",
+            "KarmaXPU": "BRAY_HdKarmaXPU"
+        }
+        renderer_cmd = renderer_map.get(renderer, renderer)
+
+        if render_type == "full":
+            frame_count = end_frame_int - start_frame_int + 1
+            cmd_preview = f'husk --frame {start_frame_int} --frame-count {frame_count} --renderer {renderer_cmd} --res-scale {res_scale_int} "{scene_path}"'
+        else:
+            mid_frame = (start_frame_int + end_frame_int) // 2
+            frames = [start_frame_int, mid_frame, end_frame_int]
+            frame_str = " ".join(str(f) for f in frames)
+            cmd_preview = f'husk --frame-list {frame_str} --renderer {renderer_cmd} --res-scale {res_scale_int} \"{scene_path}\"'
+
+        self.render_queue.append({
+            "scene_path": scene_path,
+            "start_frame": start_frame_int,
+            "end_frame": end_frame_int,
+            "renderer": renderer,
+            "res_scale": res_scale_int,
+            "render_type": render_type
+        })
+        self.render_queue_list.addItem(cmd_preview)
+        self.log_message(f"Ajouté à la file : {cmd_preview}")
+
+    def remove_selected_render(self):
+        selected = self.render_queue_list.currentRow()
+        if selected >= 0:
+            self.render_queue_list.takeItem(selected)
+            del self.render_queue[selected]
+            self.log_message("Rendu supprimé de la file.")
+
+    def start_render(self):
+        if not self.render_queue:
+            QMessageBox.information(
+                self, "Info", "La file d'attente est vide.")
+            return
+        self.start_render_queue()
 
     def start_render_queue(self):
         for render in self.render_queue:
-            if render["type"] == "full":
+            if render["render_type"] == "full":
                 self.render_scene_full(
                     render["scene_path"],
-                    int(render["start_frame"]),
-                    int(render["end_frame"]),
+                    render["start_frame"],
+                    render["end_frame"],
                     render["renderer"],
-                    int(render["resolution"])
+                    render["res_scale"]
                 )
             else:
                 self.render_scene_fml(
                     render["scene_path"],
-                    int(render["start_frame"]),
-                    int(render["end_frame"]),
+                    render["start_frame"],
+                    render["end_frame"],
                     render["renderer"],
-                    int(render["resolution"])
+                    render["res_scale"]
                 )
-        self.log_message(
-            "Tous les rendus dans la file d'attente ont été exécutés.")
-        self.render_queue.clear()
-        self.render_queue_list.clear()
+        self.log_message("Tous les rendus de la file ont été lancés.")
 
     def render_scene_full(self, scene_path, start_frame, end_frame, renderer, res_scale):
+        renderer_map = {
+            "Karma": "BRAY_HdKarma",
+            "KarmaXPU": "BRAY_HdKarmaXPU"
+        }
+        renderer_cmd = renderer_map.get(renderer, renderer)
+        frame_count = end_frame - start_frame + 1
         self.log_message(
             f"\n=== Lancement du rendu FULL SEQUENCE pour la scène : {scene_path} ===")
-        cmd = f'husk --frame {start_frame}-{end_frame} --renderer {renderer} --res-scale {res_scale} "{scene_path}"'
+        cmd = f'husk --frame {start_frame} --frame-count {frame_count} --renderer {renderer_cmd} --res-scale {res_scale} "{scene_path}"'
         self.log_message(f"Commande de rendu : {cmd}")
         env = os.environ.copy()
-        subprocess.run(cmd, shell=True, env=env)
-        self.log_message("\n=== Rendu FULL terminé. ===")
+        subprocess.Popen(f'cmd.exe /k {cmd}', env=env)
+        self.log_message("\n=== Rendu FULL lancé dans un terminal. ===")
 
     def render_scene_fml(self, scene_path, start_frame, end_frame, renderer, res_scale):
-        self.log_message(
-            f"\n=== Lancement du rendu FML pour la scène : {scene_path} ===")
-        mid_frame = start_frame + math.ceil((end_frame - start_frame) / 2)
+        renderer_map = {
+            "Karma": "BRAY_HdKarma",
+            "KarmaXPU": "BRAY_HdKarmaXPU"
+        }
+        renderer_cmd = renderer_map.get(renderer, renderer)
+        mid_frame = (start_frame + end_frame) // 2
         frames = [start_frame, mid_frame, end_frame]
         frame_str = " ".join(str(f) for f in frames)
-        cmd = f'husk --frame-list {frame_str} --renderer {renderer} --res-scale {res_scale} \"{scene_path}\"'
+        self.log_message(
+            f"\n=== Lancement du rendu FML pour la scène : {scene_path} ===")
+        cmd = f'husk --frame-list {frame_str} --renderer {renderer_cmd} --res-scale {res_scale} \"{scene_path}\"'
         self.log_message(f"Commande de rendu : {cmd}")
         env = os.environ.copy()
-        subprocess.run(cmd, shell=True, env=env)
-        self.log_message("\n=== Rendu FML terminé. ===")
+        subprocess.Popen(f'cmd.exe /k {cmd}', env=env)
+        self.log_message("\n=== Rendu FML lancé dans un terminal. ===")
 
 
 if __name__ == "__main__":
-    # Même chose ici
+    # Gestion de l'icône pour l'application (barre des tâches)
     icon_path = os.path.join(
         getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__))),
         "icon.ico"
