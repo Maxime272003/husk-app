@@ -2,11 +2,61 @@ import sys
 import math
 import subprocess
 import os
+import configparser
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
-    QHBoxLayout, QLabel, QListWidget, QTextEdit, QRadioButton, QGroupBox, QStatusBar, QMessageBox, QFileDialog, QComboBox
+    QHBoxLayout, QLabel, QListWidget, QTextEdit, QRadioButton, QGroupBox, QStatusBar, QMessageBox, QFileDialog, QComboBox, QDialog
 )
 from PyQt5.QtGui import QIcon
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, config_path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Paramètres")
+        self.setGeometry(300, 300, 500, 100)
+
+        self.config_path = config_path
+        self.config = configparser.ConfigParser()
+        self.config.read(self.config_path)
+
+        houdini_bin = self.config.get(
+            "Paths", "HOUDINI_BIN", fallback="C:\\Program Files\\Side Effects Software\\Houdini 20.5.487\\bin"
+        )
+
+        layout = QFormLayout()
+        self.houdini_bin_input = QLineEdit(houdini_bin)
+        browse_button = QPushButton("Parcourir")
+        browse_button.clicked.connect(self.browse_houdini_bin)
+        bin_layout = QHBoxLayout()
+        bin_layout.addWidget(self.houdini_bin_input)
+        bin_layout.addWidget(browse_button)
+        layout.addRow("Chemin Houdini (bin) :", bin_layout)
+
+        save_button = QPushButton("Sauvegarder")
+        save_button.clicked.connect(self.save_settings)
+        cancel_button = QPushButton("Annuler")
+        cancel_button.clicked.connect(self.reject)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(save_button)
+        buttons_layout.addWidget(cancel_button)
+        layout.addRow(buttons_layout)
+
+        self.setLayout(layout)
+
+    def browse_houdini_bin(self):
+        folder = QFileDialog.getExistingDirectory(
+            self, "Sélectionner le dossier bin de Houdini")
+        if folder:
+            self.houdini_bin_input.setText(folder)
+
+    def save_settings(self):
+        if not self.config.has_section("Paths"):
+            self.config.add_section("Paths")
+        self.config.set("Paths", "HOUDINI_BIN", self.houdini_bin_input.text())
+        with open(self.config_path, "w") as config_file:
+            self.config.write(config_file)
+        self.accept()
 
 
 class HuskRenderApp(QWidget):
@@ -24,6 +74,10 @@ class HuskRenderApp(QWidget):
         self.setWindowIcon(QIcon(icon_path))
 
         self.render_queue = []
+        self.config_path = "config.ini"
+        self.config = configparser.ConfigParser()
+        self.config.read(self.config_path)
+        self.load_environment_paths()
 
         main_layout = QVBoxLayout()
         self.create_form_layout(main_layout)
@@ -38,7 +92,24 @@ class HuskRenderApp(QWidget):
         launch_button.clicked.connect(self.start_render)
         main_layout.addWidget(launch_button)
 
+        # Ajoute le bouton paramètres en bas
+        settings_button = QPushButton("Paramètres")
+        settings_button.clicked.connect(self.open_settings_dialog)
+        main_layout.addWidget(settings_button)
+
         self.setLayout(main_layout)
+
+    def load_environment_paths(self):
+        houdini_bin = self.config.get(
+            "Paths", "HOUDINI_BIN", fallback="C:\\Program Files\\Side Effects Software\\Houdini 20.0.653\\bin"
+        )
+        os.environ["PATH"] = houdini_bin + ";" + os.environ["PATH"]
+
+    def open_settings_dialog(self):
+        dialog = SettingsDialog(self.config_path, self)
+        if dialog.exec_():
+            self.config.read(self.config_path)
+            self.load_environment_paths()
 
     def create_form_layout(self, layout):
         form_layout = QFormLayout()
@@ -219,19 +290,20 @@ class HuskRenderApp(QWidget):
             f"\n=== Lancement du rendu FULL SEQUENCE pour la scène : {scene_path} ===")
         cmd = f'husk --frame {start_frame}-{end_frame} --renderer {renderer} --res-scale {res_scale} "{scene_path}"'
         self.log_message(f"Commande de rendu : {cmd}")
-        subprocess.run(cmd, shell=True)
+        env = os.environ.copy()
+        subprocess.run(cmd, shell=True, env=env)
         self.log_message("\n=== Rendu FULL terminé. ===")
 
     def render_scene_fml(self, scene_path, start_frame, end_frame, renderer, res_scale):
         self.log_message(
             f"\n=== Lancement du rendu FML pour la scène : {scene_path} ===")
-        # Correction du calcul de la frame du milieu
         mid_frame = start_frame + math.ceil((end_frame - start_frame) / 2)
         frames = [start_frame, mid_frame, end_frame]
         frame_str = " ".join(str(f) for f in frames)
         cmd = f'husk --frame-list {frame_str} --renderer {renderer} --res-scale {res_scale} \"{scene_path}\"'
         self.log_message(f"Commande de rendu : {cmd}")
-        subprocess.run(cmd, shell=True)
+        env = os.environ.copy()
+        subprocess.run(cmd, shell=True, env=env)
         self.log_message("\n=== Rendu FML terminé. ===")
 
 
