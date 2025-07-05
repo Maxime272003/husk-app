@@ -136,7 +136,7 @@ class HuskRenderApp(QWidget):
         # Choix du renderer avec deux boutons radio
         renderer_group = QGroupBox("Renderer")
         renderer_layout = QHBoxLayout()
-        self.karma_radio = QRadioButton("Karma", self)
+        self.karma_radio = QRadioButton("KarmaCPU", self)
         self.karmaxpu_radio = QRadioButton("KarmaXPU", self)
         self.karma_radio.setChecked(True)
         renderer_layout.addWidget(self.karma_radio)
@@ -189,7 +189,7 @@ class HuskRenderApp(QWidget):
         start_frame = self.start_frame_input.text()
         end_frame = self.end_frame_input.text()
         resolution = self.resolution_input.text()
-        renderer = "Karma" if self.karma_radio.isChecked() else "KarmaXPU"
+        renderer = "KarmaCPU" if self.karma_radio.isChecked() else "KarmaXPU"
         render_type = "full" if self.full_render_radio.isChecked() else "fml"
 
         if not scene_path or not start_frame or not end_frame or not resolution:
@@ -268,7 +268,7 @@ class HuskRenderApp(QWidget):
 
     def render_scene_full(self, scene_path, start_frame, end_frame, renderer, res_scale):
         engine_map = {
-            "Karma": "cpu",
+            "KarmaCPU": "cpu",
             "KarmaXPU": "xpu"
         }
         engine_cmd = engine_map.get(renderer, "cpu")
@@ -283,7 +283,7 @@ class HuskRenderApp(QWidget):
 
     def render_scene_fml(self, scene_path, start_frame, end_frame, renderer, res_scale):
         engine_map = {
-            "Karma": "cpu",
+            "KarmaCPU": "cpu",
             "KarmaXPU": "xpu"
         }
         engine_cmd = engine_map.get(renderer, "cpu")
