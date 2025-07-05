@@ -206,20 +206,20 @@ class HuskRenderApp(QWidget):
                 self, "Erreur", "Les frames et la résolution doivent être des entiers.")
             return
 
-        renderer_map = {
-            "Karma": "BRAY_HdKarma",
-            "KarmaXPU": "BRAY_HdKarmaXPU"
+        engine_map = {
+            "KarmaCPU": "cpu",
+            "KarmaXPU": "xpu"
         }
-        renderer_cmd = renderer_map.get(renderer, renderer)
+        engine_cmd = engine_map.get(renderer, "cpu")
 
         if render_type == "full":
             frame_count = end_frame_int - start_frame_int + 1
-            cmd_preview = f'husk --frame {start_frame_int} --frame-count {frame_count} --renderer {renderer_cmd} --res-scale {res_scale_int} "{scene_path}"'
+            cmd_preview = f'husk "{scene_path}" --res-scale {res_scale_int} --frame {start_frame_int} --frame-count {frame_count} --make-output-path --engine {engine_cmd} --verbose 3'
         else:
             mid_frame = (start_frame_int + end_frame_int) // 2
             frames = [start_frame_int, mid_frame, end_frame_int]
             frame_str = " ".join(str(f) for f in frames)
-            cmd_preview = f'husk --frame-list {frame_str} --renderer {renderer_cmd} --res-scale {res_scale_int} \"{scene_path}\"'
+            cmd_preview = f'husk "{scene_path}" --res-scale {res_scale_int} --frame-list {frame_str} --make-output-path --engine {engine_cmd} --verbose 3'
 
         self.render_queue.append({
             "scene_path": scene_path,
@@ -267,32 +267,32 @@ class HuskRenderApp(QWidget):
         self.log_message("Tous les rendus de la file ont été lancés.")
 
     def render_scene_full(self, scene_path, start_frame, end_frame, renderer, res_scale):
-        renderer_map = {
-            "Karma": "BRAY_HdKarma",
-            "KarmaXPU": "BRAY_HdKarmaXPU"
+        engine_map = {
+            "Karma": "cpu",
+            "KarmaXPU": "xpu"
         }
-        renderer_cmd = renderer_map.get(renderer, renderer)
+        engine_cmd = engine_map.get(renderer, "cpu")
         frame_count = end_frame - start_frame + 1
         self.log_message(
             f"\n=== Lancement du rendu FULL SEQUENCE pour la scène : {scene_path} ===")
-        cmd = f'husk --frame {start_frame} --frame-count {frame_count} --renderer {renderer_cmd} --res-scale {res_scale} "{scene_path}"'
+        cmd = f'husk "{scene_path}" --res-scale {res_scale} --frame {start_frame} --frame-count {frame_count} --make-output-path --engine {engine_cmd} --verbose 3'
         self.log_message(f"Commande de rendu : {cmd}")
         env = os.environ.copy()
         subprocess.Popen(f'cmd.exe /k {cmd}', env=env)
         self.log_message("\n=== Rendu FULL lancé dans un terminal. ===")
 
     def render_scene_fml(self, scene_path, start_frame, end_frame, renderer, res_scale):
-        renderer_map = {
-            "Karma": "BRAY_HdKarma",
-            "KarmaXPU": "BRAY_HdKarmaXPU"
+        engine_map = {
+            "Karma": "cpu",
+            "KarmaXPU": "xpu"
         }
-        renderer_cmd = renderer_map.get(renderer, renderer)
+        engine_cmd = engine_map.get(renderer, "cpu")
         mid_frame = (start_frame + end_frame) // 2
         frames = [start_frame, mid_frame, end_frame]
         frame_str = " ".join(str(f) for f in frames)
         self.log_message(
             f"\n=== Lancement du rendu FML pour la scène : {scene_path} ===")
-        cmd = f'husk --frame-list {frame_str} --renderer {renderer_cmd} --res-scale {res_scale} \"{scene_path}\"'
+        cmd = f'husk "{scene_path}" --res-scale {res_scale} --frame-list {frame_str} --make-output-path --engine {engine_cmd} --verbose 3'
         self.log_message(f"Commande de rendu : {cmd}")
         env = os.environ.copy()
         subprocess.Popen(f'cmd.exe /k {cmd}', env=env)
