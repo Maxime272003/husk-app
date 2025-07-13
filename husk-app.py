@@ -247,23 +247,30 @@ class HuskRenderApp(QWidget):
         self.start_render_queue()
 
     def start_render_queue(self):
+        # Construit toutes les commandes husk dans une seule chaîne, séparées par des retours à la ligne
+        cmd_lines = []
         for render in self.render_queue:
+            engine_map = {
+                "KarmaCPU": "cpu",
+                "KarmaXPU": "xpu"
+            }
+            engine_cmd = engine_map.get(render["renderer"], "cpu")
             if render["render_type"] == "full":
-                self.render_scene_full(
-                    render["scene_path"],
-                    render["start_frame"],
-                    render["end_frame"],
-                    render["renderer"],
-                    render["res_scale"]
-                )
+                frame_count = render["end_frame"] - render["start_frame"] + 1
+                cmd = f'husk "{render["scene_path"]}" --res-scale {render["res_scale"]} --frame {render["start_frame"]} --frame-count {frame_count} --make-output-path --engine {engine_cmd} --verbose 3'
             else:
-                self.render_scene_fml(
-                    render["scene_path"],
-                    render["start_frame"],
-                    render["end_frame"],
-                    render["renderer"],
-                    render["res_scale"]
-                )
+                mid_frame = (render["start_frame"] + render["end_frame"]) // 2
+                frames = [render["start_frame"],
+                          mid_frame, render["end_frame"]]
+                frame_str = " ".join(str(f) for f in frames)
+                cmd = f'husk "{render["scene_path"]}" --res-scale {render["res_scale"]} --frame-list {frame_str} --make-output-path --engine {engine_cmd} --verbose 3'
+            cmd_lines.append(cmd)
+        # Utilise '&&' pour exécuter chaque commande l'une après l'autre dans le même terminal
+        full_cmd = " && ".join(cmd_lines)
+        self.log_message(
+            "Lancement de toutes les commandes dans un seul terminal :\n" + "\n".join(cmd_lines))
+        env = os.environ.copy()
+        subprocess.Popen(f'cmd.exe /k {full_cmd}', env=env)
         self.log_message("Tous les rendus de la file ont été lancés.")
 
     def render_scene_full(self, scene_path, start_frame, end_frame, renderer, res_scale):
